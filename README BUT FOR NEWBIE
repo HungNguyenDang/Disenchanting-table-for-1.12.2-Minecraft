@@ -1,6 +1,9 @@
 1. Download and install IntelliJ IDEA
 2. Fetch or download this repo, then try to build an run it.
 
+Để hiểu Forge MDK code như nào, đọc toàn bộ nội dung trong đây và làm theo:
+https://docs.minecraftforge.net/en/latest/gettingstarted
+
 Copy lại phần hướng dẫn của AI:
 2. Design the Core Components
 To create a functional de-enchanting station, your mod needs several core components working together:

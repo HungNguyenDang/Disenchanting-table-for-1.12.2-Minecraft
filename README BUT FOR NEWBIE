@@ -1,2 +1,24 @@
 1. Download and install IntelliJ IDEA
 2. Fetch or download this repo, then try to build an run it.
+
+Copy lại phần hướng dẫn của AI:
+2. Design the Core Components
+To create a functional de-enchanting station, your mod needs several core components working together:
+- Custom Block: Create a block class (extending Block) that defines your table. Override the onBlockActivated method to trigger opening your custom GUI when a player right-clicks the block.
+- Tile Entity (TileEntity): Because your table needs to hold items (an enchanted item and a blank book) and process them, you will need a Tile Entity that implements IInventory. This handles the persistent data and item slots for the block.
+- Container (Container) and GUI Handler (IGuiHandler): You need a Container class to synchronize item slots between the server and the client player inventory, paired with an IGuiHandler to map and open the UI.
+- Client GUI (GuiContainer): Create a screen class extending GuiContainer that renders your background texture (similar to a furnace or anvil GUI) and handles player interaction with the slots.
+
+3. Program the De-Enchanting Logic
+- Inside your Tile Entity or a dedicated recipe/logic helper class, write the execution code that runs when conditions are met (e.g., an enchanted item and a book are present, and the player has enough experience levels):
+- Read Enchantments: Use item stack methods to retrieve the NBT tag list of enchantments from the input item (itemStack.getTagCompound().getTagList("ench", 10)).
+- Transfer to Book: Extract the enchantment ID and level, clear or reduce them on the input tool/armor piece, and write them onto a blank book item, converting it into an Enchanted Book.
+- Experience Cost: Deduct levels or points from the interacting player to balance the mechanic, mimicking standard vanilla mechanics.
+
+4. Build Assets and Models
+- Blockstates and Models: Create the JSON model files (blockstates, block models, and item models) in your resources/assets/yourmod directory so the block renders properly in the world and in inventory.
+- Textures: Design a PNG graphic for your GUI background layout and place it in your texture assets folder.
+
+5. Build and Test
+- Run the runClient Gradle configuration from your IDE to launch a test instance of Minecraft with your mod loaded.
+- Test placing your custom table, opening the GUI, inserting items, and verifying that enchantments safely transfer to books without crashing. Once stable, run the build gradle task to compile your final .jar file.

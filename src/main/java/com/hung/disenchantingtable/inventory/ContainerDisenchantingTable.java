@@ -1,6 +1,7 @@
 package com.hung.disenchantingtable.inventory;
 
 import com.hung.disenchantingtable.tileentity.TileEntityDisenchantingTable;
+
 import net.minecraft.enchantment.Enchantment;
 import net.minecraft.enchantment.EnchantmentData;
 import net.minecraft.enchantment.EnchantmentHelper;
@@ -11,50 +12,96 @@ import net.minecraft.inventory.Container;
 import net.minecraft.inventory.Slot;
 import net.minecraft.item.ItemEnchantedBook;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.ResourceLocation;
+import net.minecraft.nbt.NBTTagCompound;
 import net.minecraft.nbt.NBTTagList;
-import net.minecraft.item.Item;
-import net.minecraft.item.ItemStack;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
 public class ContainerDisenchantingTable extends Container {
-    private final TileEntityDisenchantingTable tileEntity;
-    public final List<String> availableEnchantments = new ArrayList<>();
 
-    public ContainerDisenchantingTable(InventoryPlayer playerInventory, TileEntityDisenchantingTable tileEntity) {
+    private final TileEntityDisenchantingTable tileEntity;
+
+    /*
+     * These are used by the GUI.
+     *
+     * availableEnchantments:
+     *     Human-readable names shown to the player.
+     *
+     * availableEnchantmentIds:
+     *     Actual registry IDs corresponding to the displayed enchantments.
+     *
+     * IMPORTANT:
+     * The server does NOT trust either list when performing the operation.
+     * The server always checks the current input ItemStack again.
+     */
+    public final List<String> availableEnchantments = new ArrayList<>();
+    public final List<ResourceLocation> availableEnchantmentIds = new ArrayList<>();
+
+    public ContainerDisenchantingTable(
+            InventoryPlayer playerInventory,
+            TileEntityDisenchantingTable tileEntity) {
+
         this.tileEntity = tileEntity;
 
-        // Slot 1: Input Item (Left) - index 0
-        this.addSlotToContainer(new Slot(tileEntity, 0, 117, 33));
+        // Slot 0: Input item
+        this.addSlotToContainer(
+                new Slot(tileEntity, 0, 117, 33)
+        );
 
-        // Slot 2: Empty Book (Middle) - index 1
-        this.addSlotToContainer(new Slot(tileEntity, 1, 152, 33) {
-            @Override
-            public boolean isItemValid(ItemStack stack) {
-                return stack.getItem() == Items.BOOK;
-            }
-        });
+        // Slot 1: Empty book
+        this.addSlotToContainer(
+                new Slot(tileEntity, 1, 152, 33) {
+                    @Override
+                    public boolean isItemValid(ItemStack stack) {
+                        return stack.getItem() == Items.BOOK;
+                    }
+                }
+        );
 
-        // Slot 3: Output Enchanted Book (Right) - index 2
-        this.addSlotToContainer(new Slot(tileEntity, 2, 134, 60) {
-            @Override
-            public boolean isItemValid(ItemStack stack) {
-                return false; // Output slot only
-            }
-        });
+        // Slot 2: Output enchanted book
+        this.addSlotToContainer(
+                new Slot(tileEntity, 2, 134, 60) {
+                    @Override
+                    public boolean isItemValid(ItemStack stack) {
+                        return false;
+                    }
 
-        // Bind Player Inventory
+                    @Override
+                    public boolean canTakeStack(EntityPlayer playerIn) {
+                        return true;
+                    }
+                }
+        );
+
+        // Player inventory
         for (int i = 0; i < 3; ++i) {
             for (int j = 0; j < 9; ++j) {
-                this.addSlotToContainer(new Slot(playerInventory, j + i * 9 + 9, 8 + j * 18, 84 + i * 18));
+                this.addSlotToContainer(
+                        new Slot(
+                                playerInventory,
+                                j + i * 9 + 9,
+                                8 + j * 18,
+                                84 + i * 18
+                        )
+                );
             }
         }
 
-        // Bind Player Hotbar
+        // Player hotbar
         for (int k = 0; k < 9; ++k) {
-            this.addSlotToContainer(new Slot(playerInventory, k, 8 + k * 18, 142));
+            this.addSlotToContainer(
+                    new Slot(
+                            playerInventory,
+                            k,
+                            8 + k * 18,
+                            142
+                    )
+            );
         }
+
         updateEnchantmentList();
     }
 
@@ -69,116 +116,289 @@ public class ContainerDisenchantingTable extends Container {
         updateEnchantmentList();
     }
 
+    /**
+     * Rebuild the enchantment list from the current input ItemStack.
+     *
+     * This method is primarily for GUI display.
+     * The server NEVER relies on the list when performing a disenchant.
+     */
     public void updateEnchantmentList() {
-        availableEnchantments.clear();
-        ItemStack inputStack = this.inventorySlots.get(0).getStack(); // Slot 0 is the input item
 
-        if (!inputStack.isEmpty()) {
-            Map<Enchantment, Integer> enchantments = EnchantmentHelper.getEnchantments(inputStack);
-            for (Map.Entry<Enchantment, Integer> entry : enchantments.entrySet()) {
-                Enchantment ench = entry.getKey();
-                int level = entry.getValue();
-                if (ench != null) {
-                    // Format the enchantment name and level (e.g., "Sharpness IV")
-                    String displayName = ench.getTranslatedName(level);
-                    availableEnchantments.add(displayName);
-                }
+        availableEnchantments.clear();
+        availableEnchantmentIds.clear();
+
+        ItemStack inputStack = this.inventorySlots.get(0).getStack();
+
+        if (inputStack.isEmpty()) {
+            return;
+        }
+
+        Map<Enchantment, Integer> enchantments =
+                EnchantmentHelper.getEnchantments(inputStack);
+
+        for (Map.Entry<Enchantment, Integer> entry : enchantments.entrySet()) {
+
+            Enchantment enchantment = entry.getKey();
+            int level = entry.getValue();
+
+            if (enchantment == null) {
+                continue;
             }
+
+            ResourceLocation enchantmentId =
+                    Enchantment.REGISTRY.getNameForObject(enchantment);
+
+            if (enchantmentId == null) {
+                continue;
+            }
+
+            availableEnchantments.add(
+                    enchantment.getTranslatedName(level)
+            );
+
+            availableEnchantmentIds.add(enchantmentId);
         }
     }
 
-    public void handleEnchantmentClick(net.minecraft.entity.player.EntityPlayer player, int index) {
-        // Check bounds and make sure index is valid
-        if (index < 0 || index >= availableEnchantments.size()) return;
+    /**
+     * Called by the server when the player clicks an enchantment.
+     *
+     * IMPORTANT:
+     * The client sends the enchantment's registry ID rather than
+     * an array index. The server then looks at the CURRENT input item
+     * and verifies that the enchantment actually exists on it.
+     */
+    public void handleEnchantmentClick(
+            EntityPlayer player,
+            ResourceLocation targetEnchantmentId) {
 
-        Slot inputSlot = this.inventorySlots.get(0);   // Input item
-        Slot bookSlot = this.inventorySlots.get(1);    // Empty book
-        Slot outputSlot = this.inventorySlots.get(2);  // Output slot
+        // Make sure the player is still allowed to use this table.
+        if (!canInteractWith(player)) {
+            return;
+        }
+
+        if (targetEnchantmentId == null) {
+            return;
+        }
+
+        // Get the actual current slots from the SERVER.
+        Slot inputSlot = this.inventorySlots.get(0);
+        Slot bookSlot = this.inventorySlots.get(1);
+        Slot outputSlot = this.inventorySlots.get(2);
 
         ItemStack inputStack = inputSlot.getStack();
         ItemStack bookStack = bookSlot.getStack();
         ItemStack outputStack = outputSlot.getStack();
 
-        // Must have an item in slot 0, an empty book in slot 1, and output slot must be empty
-        if (inputStack.isEmpty() || bookStack.isEmpty() || bookStack.getItem() != Items.BOOK || !outputStack.isEmpty()) {
+        // Validate current server-side state.
+        if (inputStack.isEmpty()) {
             return;
         }
 
-        Map<Enchantment, Integer> enchantments = EnchantmentHelper.getEnchantments(inputStack);
-        List<Enchantment> enchKeys = new ArrayList<>(enchantments.keySet());
-
-        if (index >= enchKeys.size()) {
+        if (bookStack.isEmpty() || bookStack.getItem() != Items.BOOK) {
             return;
         }
 
-        Enchantment targetEnch = enchKeys.get(index);
-        int targetLevel = enchantments.get(targetEnch);
+        if (!outputStack.isEmpty()) {
+            return;
+        }
 
-        // 1. Create the output Enchanted Book
-        ItemStack enchantedBook = new ItemStack(Items.ENCHANTED_BOOK);
-        ItemEnchantedBook.addEnchantment(enchantedBook, new EnchantmentData(targetEnch, targetLevel));
+        /*
+         * Get the enchantments from the CURRENT server-side item.
+         */
+        Map<Enchantment, Integer> enchantments =
+                EnchantmentHelper.getEnchantments(inputStack);
 
-        // 2. Remove enchantment from input item
-        enchantments.remove(targetEnch);
+        /*
+         * Resolve the registry ID sent by the client.
+         */
+        Enchantment targetEnchantment =
+                Enchantment.REGISTRY.getObject(targetEnchantmentId);
 
-        // If it's an enchanted book and no enchantments are left, convert it into a normal book!
-        if (inputStack.getItem() == Items.ENCHANTED_BOOK && enchantments.isEmpty()) {
-            ItemStack normalBook = new ItemStack(Items.BOOK, inputStack.getCount());
-            inputSlot.putStack(normalBook);
-        } else {
-            // Otherwise, clear tags and re-apply remaining enchantments normally...
-            if (inputStack.hasTagCompound()) {
-                // After modifying the inputStack enchantments:
-                net.minecraft.nbt.NBTTagCompound tagCompound = inputStack.getTagCompound();
+        if (targetEnchantment == null) {
+            return;
+        }
 
-                // Force slot and tile entity updates
+        /*
+         * Verify that the enchantment is actually present
+         * on the current input item.
+         */
+        Integer targetLevel =
+                enchantments.get(targetEnchantment);
+
+        if (targetLevel == null || targetLevel <= 0) {
+            return;
+        }
+
+        /*
+         * Create the enchanted book that will contain
+         * the selected enchantment.
+         */
+        ItemStack enchantedBook =
+                new ItemStack(Items.ENCHANTED_BOOK);
+
+        ItemEnchantedBook.addEnchantment(
+                enchantedBook,
+                new EnchantmentData(
+                        targetEnchantment,
+                        targetLevel
+                )
+        );
+
+        /*
+         * Remove the selected enchantment from our working map.
+         */
+        enchantments.remove(targetEnchantment);
+
+        /*
+         * =====================================================
+         * SPECIAL CASE: INPUT IS ALREADY AN ENCHANTED BOOK
+         * =====================================================
+         *
+         * Enchanted books use:
+         *
+         *     StoredEnchantments
+         *
+         * instead of the normal item's:
+         *
+         *     ench
+         *
+         * Therefore we need to write the remaining enchantments
+         * back to StoredEnchantments manually.
+         */
+        if (inputStack.getItem() == Items.ENCHANTED_BOOK) {
+
+            if (enchantments.isEmpty()) {
+
+                /*
+                 * No enchantments remain.
+                 *
+                 * Convert the input enchanted book
+                 * into a normal book.
+                 */
+                ItemStack normalBook =
+                        new ItemStack(
+                                Items.BOOK,
+                                inputStack.getCount()
+                        );
+
+                inputSlot.putStack(normalBook);
+
+            } else {
+
+                /*
+                 * Keep the item as an enchanted book.
+                 */
+                NBTTagCompound tag =
+                        inputStack.hasTagCompound()
+                                ? inputStack.getTagCompound()
+                                : new NBTTagCompound();
+
+                /*
+                 * Build a completely new StoredEnchantments list.
+                 *
+                 * This avoids leaving the selected enchantment behind.
+                 */
+                NBTTagList storedEnchantments =
+                        new NBTTagList();
+
+                for (Map.Entry<Enchantment, Integer> entry
+                        : enchantments.entrySet()) {
+
+                    Enchantment enchantment = entry.getKey();
+                    int level = entry.getValue();
+
+                    ResourceLocation enchantmentId =
+                            Enchantment.REGISTRY.getNameForObject(
+                                    enchantment
+                            );
+
+                    if (enchantmentId == null) {
+                        continue;
+                    }
+
+                    net.minecraft.nbt.NBTTagCompound enchantmentTag =
+                            new net.minecraft.nbt.NBTTagCompound();
+
+                    enchantmentTag.setString(
+                            "id",
+                            enchantmentId.toString()
+                    );
+
+                    enchantmentTag.setShort(
+                            "lvl",
+                            (short) level
+                    );
+
+                    storedEnchantments.appendTag(
+                            enchantmentTag
+                    );
+                }
+
+                /*
+                 * Replace the old StoredEnchantments list.
+                 */
+                tag.setTag(
+                        "StoredEnchantments",
+                        storedEnchantments
+                );
+
+                inputStack.setTagCompound(tag);
+
                 inputSlot.onSlotChanged();
-                tileEntity.markDirty();
-
-                // Send changes to the client container tracking
-                this.detectAndSendChanges();
-
-                if (tagCompound.hasKey("StoredEnchantments", 9)) {
-                    tagCompound.removeTag("StoredEnchantments");
-                }
-                if (tagCompound.hasKey("ench", 9)) {
-                    tagCompound.removeTag("ench");
-                }
             }
 
-            // Re-apply remaining enchantments (if any are left) using standard helper methods
-            if (!enchantments.isEmpty()) {
-                if (inputStack.getItem() instanceof net.minecraft.item.ItemEnchantedBook) {
-                    for (Map.Entry<Enchantment, Integer> entry : enchantments.entrySet()) {
-                        ItemEnchantedBook.addEnchantment(inputStack, new EnchantmentData(entry.getKey(), entry.getValue()));
-                    }
-                } else {
-                    for (Map.Entry<Enchantment, Integer> entry : enchantments.entrySet()) {
-                        inputStack.addEnchantment(entry.getKey(), entry.getValue());
-                    }
-                }
-            }
+        } else {
+
+            /*
+             * =====================================================
+             * NORMAL ITEM
+             * =====================================================
+             *
+             * Sword, shovel, pickaxe, armor, bow, etc.
+             *
+             * For normal items EnchantmentHelper.setEnchantments()
+             * is appropriate.
+             */
+            EnchantmentHelper.setEnchantments(
+                    enchantments,
+                    inputStack
+            );
+
             inputSlot.onSlotChanged();
         }
 
-        // 4. Consume 1 empty book from slot 1
+        /*
+         * Consume ONE normal book.
+         */
         bookStack.shrink(1);
-        if (bookStack.getCount() <= 0) {
+
+        if (bookStack.isEmpty()) {
             bookSlot.putStack(ItemStack.EMPTY);
         } else {
             bookSlot.onSlotChanged();
         }
 
-        // 5. Place the finished enchanted book into the output slot (Slot 2)
+        /*
+         * Put the generated enchanted book into the output.
+         */
         outputSlot.putStack(enchantedBook);
         outputSlot.onSlotChanged();
 
-        // 6. Force input slot to flag changes so server syncs it to the client
+        /*
+         * Mark inventory changes.
+         */
         inputSlot.onSlotChanged();
+        tileEntity.markDirty();
 
-        // 7. Refresh GUI list and push changes across the network container tracker
+        /*
+         * Rebuild the display list on the server.
+         */
         updateEnchantmentList();
 
-        tileEntity.markDirty();
+        /*
+         * Synchronize the container AFTER all modifications are finished.
+         */
+        detectAndSendChanges();
     }
 }

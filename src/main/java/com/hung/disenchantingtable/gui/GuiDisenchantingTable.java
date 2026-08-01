@@ -1,16 +1,22 @@
 package com.hung.disenchantingtable.gui;
 
 import com.hung.disenchantingtable.DisenchantingTable;
-import com.hung.disenchantingtable.network.PacketDisenchantSelect;
-
 import com.hung.disenchantingtable.inventory.ContainerDisenchantingTable;
+import com.hung.disenchantingtable.network.PacketDisenchantSelect;
 import com.hung.disenchantingtable.tileentity.TileEntityDisenchantingTable;
+
+import net.minecraft.client.audio.PositionedSoundRecord;
 import net.minecraft.client.gui.inventory.GuiContainer;
 import net.minecraft.client.renderer.GlStateManager;
+import net.minecraft.client.resources.I18n;
+import net.minecraft.client.Minecraft;
 import net.minecraft.entity.player.InventoryPlayer;
-import net.minecraft.util.ResourceLocation;
-import org.lwjgl.input.Mouse;
+import net.minecraft.init.Items;
+import net.minecraft.init.SoundEvents;
 import net.minecraft.item.ItemStack;
+import net.minecraft.util.ResourceLocation;
+
+import org.lwjgl.input.Mouse;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -20,11 +26,19 @@ public class GuiDisenchantingTable extends GuiContainer {
     private static final ResourceLocation TEXTURE = new ResourceLocation("disenchantingtable:textures/gui/disenchanting_table.png");
     private final TileEntityDisenchantingTable tileEntity;
     private final ContainerDisenchantingTable disenchantContainer;
+
     private int clickCooldown = 0;
+
+    // Display names
+    private final List<String> availableEnchantments =
+            new ArrayList<>();
+
+    // Actual enchantment registry IDs
+    private final List<ResourceLocation> availableEnchantmentIds =
+            new ArrayList<>();
 
     // Scroll state variables for the enchantment list
     private int scrollOffset = 0;
-    private final List<String> availableEnchantments = new ArrayList<>(); // Populated from item in slot 0
     private boolean isDraggingScrollbar = false;
 
     // List Panel Bounds in GUI coordinates
@@ -43,11 +57,37 @@ public class GuiDisenchantingTable extends GuiContainer {
 
     @Override
     public void updateScreen() {
+
         super.updateScreen();
-        // Dynamically sync and update the list from the container every tick
+
+        /*
+         * The client container is synchronized by Minecraft.
+         *
+         * We rebuild the GUI's display list from the current
+         * client-side container state.
+         */
         this.disenchantContainer.updateEnchantmentList();
+
         this.availableEnchantments.clear();
-        this.availableEnchantments.addAll(this.disenchantContainer.availableEnchantments);
+        this.availableEnchantments.addAll(
+                this.disenchantContainer.availableEnchantments
+        );
+
+        this.availableEnchantmentIds.clear();
+        this.availableEnchantmentIds.addAll(
+                this.disenchantContainer.availableEnchantmentIds
+        );
+
+        /*
+         * Make sure scrolling doesn't point beyond the new list.
+         */
+        int maxScroll =
+                Math.max(0, availableEnchantments.size() - 3);
+
+        if (scrollOffset > maxScroll) {
+            scrollOffset = maxScroll;
+        }
+
         if (clickCooldown > 0) {
             clickCooldown--;
         }
@@ -64,9 +104,14 @@ public class GuiDisenchantingTable extends GuiContainer {
         int guiTopPos = (this.height - this.ySize) / 2;
 
         // Check scroll wheel inside list area
-        if (wheel != 0 && mouseX >= guiLeftPos + listX && mouseX <= guiLeftPos + listX + listWidth &&
-                mouseY >= guiTopPos + listY && mouseY <= guiTopPos + listY + listHeight) {
+        if (wheel != 0
+                && mouseX >= guiLeftPos + listX
+                && mouseX <= guiLeftPos + listX + listWidth
+                && mouseY >= guiTopPos + listY
+                && mouseY <= guiTopPos + listY + listHeight) {
+
             int maxScroll = Math.max(0, availableEnchantments.size() - 3);
+
             if (wheel > 0 && scrollOffset > 0) {
                 scrollOffset--;
             } else if (wheel < 0 && scrollOffset < maxScroll) {
@@ -195,6 +240,11 @@ public class GuiDisenchantingTable extends GuiContainer {
             return;
         }
 
+        // Only react to left-click.
+        if (mouseButton != 0) {
+            return;
+        }
+
         int guiLeftPos = (this.width - this.xSize) / 2;
         int guiTopPos = (this.height - this.ySize) / 2;
 
@@ -204,29 +254,52 @@ public class GuiDisenchantingTable extends GuiContainer {
         ItemStack outputStack = this.disenchantContainer.inventorySlots.get(2).getStack();
 
         // Ensure input item exists, slot 1 has an empty book, and output is clear
-        if (inputStack.isEmpty() || bookStack.isEmpty() || bookStack.getItem() != net.minecraft.init.Items.BOOK || !outputStack.isEmpty()) {
+        if (inputStack.isEmpty()
+                || bookStack.isEmpty()
+                || bookStack.getItem() != Items.BOOK
+                || !outputStack.isEmpty()) {
             return;
         }
 
         // Check if click is inside the list panel area
-        if (mouseX >= guiLeftPos + listX && mouseX <= guiLeftPos + listX + listWidth &&
-                mouseY >= guiTopPos + listY && mouseY <= guiTopPos + listY + listHeight) {
+        if (mouseX >= guiLeftPos + listX
+                && mouseX <= guiLeftPos + listX + listWidth
+                && mouseY >= guiTopPos + listY
+                && mouseY <= guiTopPos + listY + listHeight) {
 
             int relativeY = mouseY - (guiTopPos + listY + 2);
-            if (relativeY >= 0) {
+
+            if (relativeY < 0) {return;}
+
                 int clickedRow = relativeY / 23; // 23 is box height + gap spacing step
-                if (clickedRow >= 0 && clickedRow < 3) {
-                    int targetIndex = scrollOffset + clickedRow;
-                    if (targetIndex < availableEnchantments.size()) {
-                        // Play click sound feedback
-                        this.mc.getSoundHandler().playSound(net.minecraft.client.audio.PositionedSoundRecord.getMasterRecord(net.minecraft.init.SoundEvents.UI_BUTTON_CLICK, 1.0F));
 
-                        // Send packet to server to perform the disenchant action
-                        DisenchantingTable.NETWORK.sendToServer(new PacketDisenchantSelect(targetIndex));
+            if (clickedRow >= 0 && clickedRow < 3) {
+                int targetIndex = scrollOffset + clickedRow;
+                if (targetIndex < availableEnchantments.size()) {
+                    ResourceLocation targetEnchantmentId = availableEnchantmentIds.get(targetIndex);
 
-                        // Set a short 5-tick cooldown to prevent desync packet spam
-                        clickCooldown = 5;
+                    if (targetEnchantmentId == null) {
+                        return;
                     }
+
+                    // Play click sound feedback
+                    this.mc.getSoundHandler().playSound(net.minecraft.client.audio.PositionedSoundRecord.getMasterRecord(net.minecraft.init.SoundEvents.UI_BUTTON_CLICK, 1.0F));
+
+                    /*
+                     * IMPORTANT:
+                     *
+                     * We now send the actual enchantment ID.
+                     *
+                     * We do NOT send targetIndex.
+                     */
+                    DisenchantingTable.NETWORK.sendToServer(
+                            new PacketDisenchantSelect(
+                                    targetEnchantmentId
+                            )
+                    );
+
+                    // Set a short 5-tick cooldown to prevent desync packet spam
+                    clickCooldown = 5;
                 }
             }
         }

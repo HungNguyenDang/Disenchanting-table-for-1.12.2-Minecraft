@@ -1,8 +1,15 @@
 1. Download and install IntelliJ IDEA
 2. Fetch or download this repo, then try to build an run it.
 
+Chép gần như hết code trong này qua, sửa lại chút logic:
+https://github.com/Impelon/Disenchanter
+- Cho phép lực enchanment khi extract.
+- Không break the item.
+- Disenchant any enchanments.
+
 Tham khảo document này:
-- https://docs.minecraftforge.net/en/latest/gettingstarted/
+- Maybe for newer Minecraft version: https://docs.minecraftforge.net/en/latest/gettingstarted/ 
+- For 1.12: https://docs.minecraftforge.net/en/1.12.x/
 
 Copy lại phần hướng dẫn của AI:
 2. Design the Core Components

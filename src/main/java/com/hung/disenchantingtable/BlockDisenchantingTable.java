@@ -1,5 +1,7 @@
 package com.hung.disenchantingtable;
 
+import com.hung.disenchantingtable.DisenchantingTable;
+
 import net.minecraft.block.Block;
 import net.minecraft.block.material.Material;
 import net.minecraft.block.state.IBlockState;
@@ -24,8 +26,28 @@ public class BlockDisenchantingTable extends Block {
     @Override
     public boolean onBlockActivated(World worldIn, BlockPos pos, IBlockState state, EntityPlayer playerIn, EnumHand hand, EnumFacing side, float hitX, float hitY, float hitZ) {
         if (!worldIn.isRemote) {
-            // TODO: Trigger opening your custom GUI handler here
+            playerIn.openGui(DisenchantingTable.instance, com.hung.disenchantingtable.util.ModGuiHandler.GUI_DISENCHANTING_TABLE, worldIn, pos.getX(), pos.getY(), pos.getZ());
         }
         return true;
+    }
+
+    @Override
+    public boolean isOpaqueCube(IBlockState state) {
+        return false;
+    }
+
+    @Override
+    public boolean isFullCube(IBlockState state) {
+        return false;
+    }
+
+    @Override
+    public boolean hasTileEntity(net.minecraft.block.state.IBlockState state) {
+        return true;
+    }
+
+    @Override
+    public net.minecraft.tileentity.TileEntity createTileEntity(net.minecraft.world.World world, net.minecraft.block.state.IBlockState state) {
+        return new com.hung.disenchantingtable.tileentity.TileEntityDisenchantingTable();
     }
 }

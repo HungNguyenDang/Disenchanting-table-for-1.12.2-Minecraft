@@ -1,0 +1,29 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " X ",
+    "EBG",
+    "OOO"
+  ],
+  "key": {
+    "X": {
+      "item": "minecraft:glass"
+    },
+    "E": {
+      "item": "minecraft:emerald_block"
+    },
+    "B": {
+      "item": "minecraft:book"
+    },
+    "G": {
+      "item": "minecraft:gold_block"
+    },
+    "O": {
+      "item": "minecraft:obsidian"
+    }
+  },
+  "result": {
+    "item": "disenchantingtable:disenchanting_table",
+    "count": 1
+  }
+}

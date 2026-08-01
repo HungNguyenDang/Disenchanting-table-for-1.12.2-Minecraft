@@ -1,0 +1,10 @@
+{
+  "forge_marker": 1,
+  "defaults": {
+    "model": "disenchantingtable:disenchanting_table",
+    "transform": "forge:default-block"
+  },
+  "variants": {
+    "normal": { "model": "disenchantingtable:disenchanting_table" }
+  }
+}

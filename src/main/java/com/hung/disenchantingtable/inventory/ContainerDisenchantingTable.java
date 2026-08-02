@@ -119,7 +119,6 @@ public class ContainerDisenchantingTable extends Container {
 
     /**
      * Rebuild the enchantment list from the current input ItemStack.
-     *
      * This method is primarily for GUI display.
      * The server NEVER relies on the list when performing a disenchant.
      */
@@ -179,38 +178,44 @@ public class ContainerDisenchantingTable extends Container {
                 NBTTagCompound enchantmentTag =
                         enchantmentList.getCompoundTagAt(i);
 
-                String id =
-                        enchantmentTag.getString("id");
+                /*
+                 * In Minecraft 1.12.2, enchanted-book enchantment IDs
+                 * are stored as numeric SHORT values.
+                 *
+                 * Example:
+                 *
+                 * id: 16s
+                 * lvl: 4s
+                 *
+                 * NOT:
+                 *
+                 * id: "minecraft:sharpness"
+                 */
+                int enchantmentNumericId =
+                        enchantmentTag.getShort("id");
 
                 int level =
                         enchantmentTag.getShort("lvl");
 
-                if (id == null || id.isEmpty()) {
-                    continue;
-                }
-
-                ResourceLocation enchantmentId;
-
-                try {
-
-                    enchantmentId =
-                            new ResourceLocation(id);
-
-                } catch (Exception e) {
-
+                if (enchantmentNumericId < 0 || level <= 0) {
                     continue;
                 }
 
                 Enchantment enchantment =
-                        Enchantment.REGISTRY.getObject(
-                                enchantmentId
+                        Enchantment.getEnchantmentByID(
+                                enchantmentNumericId
                         );
 
                 if (enchantment == null) {
                     continue;
                 }
 
-                if (level <= 0) {
+                ResourceLocation enchantmentId =
+                        Enchantment.REGISTRY.getNameForObject(
+                                enchantment
+                        );
+
+                if (enchantmentId == null) {
                     continue;
                 }
 
@@ -395,13 +400,31 @@ public class ContainerDisenchantingTable extends Container {
                 NBTTagCompound enchantmentTag =
                         oldList.getCompoundTagAt(i);
 
-                String id =
-                        enchantmentTag.getString("id");
+                int enchantmentNumericId =
+                        enchantmentTag.getShort("id");
 
                 int level =
                         enchantmentTag.getShort("lvl");
 
-                if (targetEnchantmentId.toString().equals(id)
+                Enchantment enchantment =
+                        Enchantment.getEnchantmentByID(
+                                enchantmentNumericId
+                        );
+
+                if (enchantment == null) {
+                    continue;
+                }
+
+                ResourceLocation enchantmentId =
+                        Enchantment.REGISTRY.getNameForObject(
+                                enchantment
+                        );
+
+                if (enchantmentId == null) {
+                    continue;
+                }
+
+                if (targetEnchantmentId.equals(enchantmentId)
                         && level == targetEnchantmentLevel) {
 
                     targetIndex = i;

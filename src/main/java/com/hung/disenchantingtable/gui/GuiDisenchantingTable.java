@@ -37,6 +37,9 @@ public class GuiDisenchantingTable extends GuiContainer {
     private final List<ResourceLocation> availableEnchantmentIds =
             new ArrayList<>();
 
+    private final List<Integer> availableEnchantmentLevels =
+            new ArrayList<>();
+
     // Scroll state variables for the enchantment list
     private int scrollOffset = 0;
     private boolean isDraggingScrollbar = false;
@@ -76,6 +79,12 @@ public class GuiDisenchantingTable extends GuiContainer {
         this.availableEnchantmentIds.clear();
         this.availableEnchantmentIds.addAll(
                 this.disenchantContainer.availableEnchantmentIds
+        );
+
+        this.availableEnchantmentLevels.clear();
+
+        this.availableEnchantmentLevels.addAll(
+                this.disenchantContainer.availableEnchantmentLevels
         );
 
         /*
@@ -275,32 +284,45 @@ public class GuiDisenchantingTable extends GuiContainer {
 
             if (clickedRow >= 0 && clickedRow < 3) {
                 int targetIndex = scrollOffset + clickedRow;
-                if (targetIndex < availableEnchantments.size()) {
-                    ResourceLocation targetEnchantmentId = availableEnchantmentIds.get(targetIndex);
 
-                    if (targetEnchantmentId == null) {
-                        return;
-                    }
+                /*
+                 * Make sure both lists contain the same entry.
+                 */
+                if (targetIndex < 0
+                        || targetIndex >= availableEnchantments.size()
+                        || targetIndex >= availableEnchantmentIds.size()
+                        || targetIndex >= availableEnchantmentLevels.size()) {
 
-                    // Play click sound feedback
-                    this.mc.getSoundHandler().playSound(net.minecraft.client.audio.PositionedSoundRecord.getMasterRecord(net.minecraft.init.SoundEvents.UI_BUTTON_CLICK, 1.0F));
-
-                    /*
-                     * IMPORTANT:
-                     *
-                     * We now send the actual enchantment ID.
-                     *
-                     * We do NOT send targetIndex.
-                     */
-                    DisenchantingTable.NETWORK.sendToServer(
-                            new PacketDisenchantSelect(
-                                    targetEnchantmentId
-                            )
-                    );
-
-                    // Set a short 5-tick cooldown to prevent desync packet spam
-                    clickCooldown = 5;
+                    return;
                 }
+
+                ResourceLocation targetEnchantmentId = availableEnchantmentIds.get(targetIndex);
+                int targetEnchantmentLevel =
+                        availableEnchantmentLevels.get(targetIndex);
+
+                if (targetEnchantmentId == null) {
+                    return;
+                }
+
+                // Play click sound feedback
+                this.mc.getSoundHandler().playSound(net.minecraft.client.audio.PositionedSoundRecord.getMasterRecord(net.minecraft.init.SoundEvents.UI_BUTTON_CLICK, 1.0F));
+
+                /*
+                 * IMPORTANT:
+                 *
+                 * We now send the actual enchantment ID.
+                 *
+                 * We do NOT send targetIndex.
+                 */
+                DisenchantingTable.NETWORK.sendToServer(
+                        new PacketDisenchantSelect(
+                                targetEnchantmentId,
+                                targetEnchantmentLevel
+                        )
+                );
+
+                // Set a short 5-tick cooldown to prevent desync packet spam
+                clickCooldown = 5;
             }
         }
     }

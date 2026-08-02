@@ -38,6 +38,7 @@ public class ContainerDisenchantingTable extends Container {
      * The server always checks the current input ItemStack again.
      */
     public final List<String> availableEnchantments = new ArrayList<>();
+    public final List<Integer> availableEnchantmentLevels = new ArrayList<>();
     public final List<ResourceLocation> availableEnchantmentIds = new ArrayList<>();
 
     public ContainerDisenchantingTable(
@@ -126,27 +127,152 @@ public class ContainerDisenchantingTable extends Container {
 
         availableEnchantments.clear();
         availableEnchantmentIds.clear();
+        availableEnchantmentLevels.clear();
 
-        ItemStack inputStack = this.inventorySlots.get(0).getStack();
+        ItemStack inputStack =
+                this.inventorySlots
+                        .get(0)
+                        .getStack();
 
         if (inputStack.isEmpty()) {
             return;
         }
 
+        /*
+         * =====================================================
+         * ENCHANTED BOOK
+         * =====================================================
+         *
+         * Read the actual StoredEnchantments NBT list.
+         *
+         * This preserves duplicate enchantments such as:
+         *
+         * Protection IV
+         * Protection I
+         */
+        if (inputStack.getItem() == Items.ENCHANTED_BOOK) {
+
+            if (!inputStack.hasTagCompound()) {
+                return;
+            }
+
+            NBTTagCompound tag =
+                    inputStack.getTagCompound();
+
+            if (!tag.hasKey(
+                    "StoredEnchantments",
+                    9)) {
+
+                return;
+            }
+
+            NBTTagList enchantmentList =
+                    tag.getTagList(
+                            "StoredEnchantments",
+                            10
+                    );
+
+            for (int i = 0;
+                 i < enchantmentList.tagCount();
+                 i++) {
+
+                NBTTagCompound enchantmentTag =
+                        enchantmentList.getCompoundTagAt(i);
+
+                String id =
+                        enchantmentTag.getString("id");
+
+                int level =
+                        enchantmentTag.getShort("lvl");
+
+                if (id == null || id.isEmpty()) {
+                    continue;
+                }
+
+                ResourceLocation enchantmentId;
+
+                try {
+
+                    enchantmentId =
+                            new ResourceLocation(id);
+
+                } catch (Exception e) {
+
+                    continue;
+                }
+
+                Enchantment enchantment =
+                        Enchantment.REGISTRY.getObject(
+                                enchantmentId
+                        );
+
+                if (enchantment == null) {
+                    continue;
+                }
+
+                if (level <= 0) {
+                    continue;
+                }
+
+                /*
+                 * Add EVERY entry.
+                 *
+                 * This is what allows:
+                 *
+                 * Protection IV
+                 * Protection I
+                 *
+                 * to both appear.
+                 */
+                availableEnchantments.add(
+                        enchantment.getTranslatedName(level)
+                );
+
+                availableEnchantmentIds.add(
+                        enchantmentId
+                );
+
+                availableEnchantmentLevels.add(
+                        level
+                );
+            }
+
+            return;
+        }
+
+        /*
+         * =====================================================
+         * NORMAL ITEM
+         * =====================================================
+         *
+         * Normal items can still use EnchantmentHelper because
+         * normal items are not supposed to have duplicate copies
+         * of the same enchantment.
+         */
         Map<Enchantment, Integer> enchantments =
-                EnchantmentHelper.getEnchantments(inputStack);
+                EnchantmentHelper.getEnchantments(
+                        inputStack
+                );
 
-        for (Map.Entry<Enchantment, Integer> entry : enchantments.entrySet()) {
+        for (Map.Entry<Enchantment, Integer> entry
+                : enchantments.entrySet()) {
 
-            Enchantment enchantment = entry.getKey();
-            int level = entry.getValue();
+            Enchantment enchantment =
+                    entry.getKey();
 
-            if (enchantment == null) {
+            int level =
+                    entry.getValue();
+
+            if (enchantment == null
+                    || level <= 0) {
+
                 continue;
             }
 
             ResourceLocation enchantmentId =
-                    Enchantment.REGISTRY.getNameForObject(enchantment);
+                    Enchantment.REGISTRY.getNameForObject(
+                            enchantment
+                    );
 
             if (enchantmentId == null) {
                 continue;
@@ -156,7 +282,13 @@ public class ContainerDisenchantingTable extends Container {
                     enchantment.getTranslatedName(level)
             );
 
-            availableEnchantmentIds.add(enchantmentId);
+            availableEnchantmentIds.add(
+                    enchantmentId
+            );
+
+            availableEnchantmentLevels.add(
+                    level
+            );
         }
     }
 
@@ -170,7 +302,8 @@ public class ContainerDisenchantingTable extends Container {
      */
     public void handleEnchantmentClick(
             EntityPlayer player,
-            ResourceLocation targetEnchantmentId) {
+            ResourceLocation targetEnchantmentId,
+            int targetEnchantmentLevel) {
 
         // Make sure the player is still allowed to use this table.
         if (!canInteractWith(player)) {
@@ -178,6 +311,12 @@ public class ContainerDisenchantingTable extends Container {
         }
 
         if (targetEnchantmentId == null) {
+            return;
+        }
+
+        if (targetEnchantmentLevel <= 0
+                || targetEnchantmentLevel > 32767) {
+
             return;
         }
 
@@ -204,77 +343,139 @@ public class ContainerDisenchantingTable extends Container {
         }
 
         /*
-         * Get the enchantments from the CURRENT server-side item.
-         */
-        Map<Enchantment, Integer> enchantments =
-                EnchantmentHelper.getEnchantments(inputStack);
-
-        /*
          * Resolve the registry ID sent by the client.
          */
         Enchantment targetEnchantment =
-                Enchantment.REGISTRY.getObject(targetEnchantmentId);
+                Enchantment.REGISTRY.getObject(
+                        targetEnchantmentId
+                );
 
         if (targetEnchantment == null) {
             return;
         }
 
         /*
-         * Verify that the enchantment is actually present
-         * on the current input item.
-         */
-        Integer targetLevel =
-                enchantments.get(targetEnchantment);
-
-        if (targetLevel == null || targetLevel <= 0) {
-            return;
-        }
-
-        /*
-         * Create the enchanted book that will contain
-         * the selected enchantment.
-         */
-        ItemStack enchantedBook =
-                new ItemStack(Items.ENCHANTED_BOOK);
-
-        ItemEnchantedBook.addEnchantment(
-                enchantedBook,
-                new EnchantmentData(
-                        targetEnchantment,
-                        targetLevel
-                )
-        );
-
-        /*
-         * Remove the selected enchantment from our working map.
-         */
-        enchantments.remove(targetEnchantment);
-
-        /*
          * =====================================================
-         * SPECIAL CASE: INPUT IS ALREADY AN ENCHANTED BOOK
+         * ENCHANTED BOOK
          * =====================================================
-         *
-         * Enchanted books use:
-         *
-         *     StoredEnchantments
-         *
-         * instead of the normal item's:
-         *
-         *     ench
-         *
-         * Therefore we need to write the remaining enchantments
-         * back to StoredEnchantments manually.
          */
         if (inputStack.getItem() == Items.ENCHANTED_BOOK) {
 
-            if (enchantments.isEmpty()) {
+            if (!inputStack.hasTagCompound()) { return;}
+
+            NBTTagCompound tag =
+                    inputStack.getTagCompound();
+
+            if (!tag.hasKey(
+                    "StoredEnchantments",
+                    9)) {
+                return;
+            }
+
+            NBTTagList oldList =
+                    tag.getTagList(
+                            "StoredEnchantments",
+                            10
+                    );
+
+            /*
+             * Find the EXACT entry:
+             *
+             * enchantment ID + level
+             *
+             * This is what allows Protection IV and Protection I
+             * to coexist.
+             */
+            int targetIndex = -1;
+
+            for (int i = 0;
+                 i < oldList.tagCount();
+                 i++) {
+
+                NBTTagCompound enchantmentTag =
+                        oldList.getCompoundTagAt(i);
+
+                String id =
+                        enchantmentTag.getString("id");
+
+                int level =
+                        enchantmentTag.getShort("lvl");
+
+                if (targetEnchantmentId.toString().equals(id)
+                        && level == targetEnchantmentLevel) {
+
+                    targetIndex = i;
+                    break;
+                }
+            }
+
+            /*
+             * The client may be out of date.
+             *
+             * If the exact enchantment no longer exists,
+             * reject the request.
+             */
+            if (targetIndex < 0) {
+                return;
+            }
+
+            /*
+             * Create the output book.
+             */
+            ItemStack enchantedBook =
+                    new ItemStack(
+                            Items.ENCHANTED_BOOK
+                    );
+
+            ItemEnchantedBook.addEnchantment(
+                    enchantedBook,
+                    new EnchantmentData(
+                            targetEnchantment,
+                            targetEnchantmentLevel
+                    )
+            );
+
+            /*
+             * Build a new list WITHOUT the selected entry.
+             */
+            NBTTagList newList =
+                    new NBTTagList();
+
+            for (int i = 0;
+                 i < oldList.tagCount();
+                 i++) {
 
                 /*
-                 * No enchantments remain.
+                 * Skip ONLY the selected entry.
+                 */
+                if (i == targetIndex) {
+                    continue;
+                }
+
+                NBTTagCompound original =
+                        oldList.getCompoundTagAt(i);
+
+                /*
+                 * Copy the tag so we don't accidentally
+                 * modify the old list while iterating.
+                 */
+                NBTTagCompound copy =
+                        original.copy();
+
+                newList.appendTag(copy);
+            }
+
+            /*
+             * =================================================
+             * WHAT REMAINS?
+             * =================================================
+             */
+            if (newList.tagCount() == 0) {
+
+                /*
+                 * Nothing remains.
                  *
-                 * Convert the input enchanted book
-                 * into a normal book.
+                 * Enchanted Book -> Normal Book
                  */
                 ItemStack normalBook =
                         new ItemStack(
@@ -282,65 +483,20 @@ public class ContainerDisenchantingTable extends Container {
                                 inputStack.getCount()
                         );
 
-                inputSlot.putStack(normalBook);
+                inputSlot.putStack(
+                        normalBook
+                );
 
             } else {
 
                 /*
-                 * Keep the item as an enchanted book.
-                 */
-                NBTTagCompound tag =
-                        inputStack.hasTagCompound()
-                                ? inputStack.getTagCompound()
-                                : new NBTTagCompound();
-
-                /*
-                 * Build a completely new StoredEnchantments list.
+                 * Other enchantments remain.
                  *
-                 * This avoids leaving the selected enchantment behind.
-                 */
-                NBTTagList storedEnchantments =
-                        new NBTTagList();
-
-                for (Map.Entry<Enchantment, Integer> entry
-                        : enchantments.entrySet()) {
-
-                    Enchantment enchantment = entry.getKey();
-                    int level = entry.getValue();
-
-                    ResourceLocation enchantmentId =
-                            Enchantment.REGISTRY.getNameForObject(
-                                    enchantment
-                            );
-
-                    if (enchantmentId == null) {
-                        continue;
-                    }
-
-                    net.minecraft.nbt.NBTTagCompound enchantmentTag =
-                            new net.minecraft.nbt.NBTTagCompound();
-
-                    enchantmentTag.setString(
-                            "id",
-                            enchantmentId.toString()
-                    );
-
-                    enchantmentTag.setShort(
-                            "lvl",
-                            (short) level
-                    );
-
-                    storedEnchantments.appendTag(
-                            enchantmentTag
-                    );
-                }
-
-                /*
-                 * Replace the old StoredEnchantments list.
+                 * Keep the input as an enchanted book.
                  */
                 tag.setTag(
                         "StoredEnchantments",
-                        storedEnchantments
+                        newList
                 );
 
                 inputStack.setTagCompound(tag);
@@ -348,57 +504,147 @@ public class ContainerDisenchantingTable extends Container {
                 inputSlot.onSlotChanged();
             }
 
-        } else {
+            /*
+             * Consume one normal book.
+             */
+            bookStack.shrink(1);
+
+            if (bookStack.isEmpty()) {
+
+                bookSlot.putStack(
+                        ItemStack.EMPTY
+                );
+
+            } else {
+
+                bookSlot.onSlotChanged();
+            }
 
             /*
-             * =====================================================
-             * NORMAL ITEM
-             * =====================================================
-             *
-             * Sword, shovel, pickaxe, armor, bow, etc.
-             *
-             * For normal items EnchantmentHelper.setEnchantments()
-             * is appropriate.
+             * Put selected enchantment into output.
              */
-            EnchantmentHelper.setEnchantments(
-                    enchantments,
-                    inputStack
+            outputSlot.putStack(
+                    enchantedBook
             );
 
+            outputSlot.onSlotChanged();
+
             inputSlot.onSlotChanged();
+
+            tileEntity.markDirty();
+
+            updateEnchantmentList();
+
+            detectAndSendChanges();
+
+            return;
         }
 
         /*
-         * Consume ONE normal book.
+         * =====================================================
+         * NORMAL ITEM
+         * =====================================================
+         *
+         * Normal items use the normal enchantment map.
+         */
+        Map<Enchantment, Integer> enchantments =
+                EnchantmentHelper.getEnchantments(
+                        inputStack
+                );
+
+        Integer actualLevel =
+                enchantments.get(
+                        targetEnchantment
+                );
+
+        /*
+         * Verify that the requested enchantment really exists
+         * on the current item.
+         */
+        if (actualLevel == null
+                || actualLevel <= 0) {
+
+            return;
+        }
+
+        /*
+         * For normal items, the selected level must match.
+         */
+        if (actualLevel != targetEnchantmentLevel) {
+            return;
+        }
+
+        /*
+         * Create output.
+         */
+        ItemStack enchantedBook =
+                new ItemStack(
+                        Items.ENCHANTED_BOOK
+                );
+
+        ItemEnchantedBook.addEnchantment(
+                enchantedBook,
+                new EnchantmentData(
+                        targetEnchantment,
+                        targetEnchantmentLevel
+                )
+        );
+
+        /*
+         * Remove enchantment.
+         */
+        enchantments.remove(
+                targetEnchantment
+        );
+
+        /*
+         * If no enchantments remain,
+         * the input item simply becomes unenchanted.
+         */
+        EnchantmentHelper.setEnchantments(
+                enchantments,
+                inputStack
+        );
+
+        inputSlot.onSlotChanged();
+
+        /*
+         * Consume one normal book.
          */
         bookStack.shrink(1);
 
         if (bookStack.isEmpty()) {
-            bookSlot.putStack(ItemStack.EMPTY);
+
+            bookSlot.putStack(
+                    ItemStack.EMPTY
+            );
+
         } else {
+
             bookSlot.onSlotChanged();
         }
 
         /*
-         * Put the generated enchanted book into the output.
+         * Output.
          */
-        outputSlot.putStack(enchantedBook);
+        outputSlot.putStack(
+                enchantedBook
+        );
+
         outputSlot.onSlotChanged();
 
-        /*
-         * Mark inventory changes.
-         */
         inputSlot.onSlotChanged();
+
         tileEntity.markDirty();
 
-        /*
-         * Rebuild the display list on the server.
-         */
         updateEnchantmentList();
 
-        /*
-         * Synchronize the container AFTER all modifications are finished.
-         */
         detectAndSendChanges();
+    }
+
+    @Override
+    public ItemStack transferStackInSlot(EntityPlayer playerIn, int index) {
+        // Disable shift-click item movement in this container.
+        return ItemStack.EMPTY;
     }
 }
